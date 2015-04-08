@@ -3,7 +3,6 @@
 from urllib.request import *
 import re
 import os
-import binascii
 import time
 import logging
 import configparser
@@ -15,27 +14,9 @@ logging.basicConfig(
 
 _config_file_name = 'conf.ini'
 
-_config = configparser.ConfigParser()
-_config.read(_config_file_name)
-_used_conf_section = _config['DEFAULT']
-
-
-BASE_URL = _used_conf_section['base_url']
-
-COUNT_URL = _used_conf_section['count_url']
-ID_PAGE = _used_conf_section['id_url']
-
-VOTE_COUNT_REGEX = re.compile(_used_conf_section['vote_count_regex'], flags=re.DOTALL)
-
-ID_REGEX = re.compile(_used_conf_section['id_regex'])
-
-TIMEOUT = int(_used_conf_section['vote_interval'])
+id_retry_timeout = 600
 
 TRY_MAX_COUNT = 4
-
-reference_random_string = '9aedac4c64bf5bf3535ad2f09ec93f9a'
-
-random_bits_length = len(reference_random_string) * 4
 
 
 class AlreadyVoted(Exception):
@@ -48,22 +29,24 @@ class AlreadyVoted(Exception):
     __repr__ = __str__
 
 
-def get_base_page(page=COUNT_URL):
-    for i in range(TRY_MAX_COUNT):
+def get_base_page(page, try_max_count=TRY_MAX_COUNT):
+
+    for i in range(try_max_count):
         content = urlopen(page).read().decode()
         if content:
             return content
     else:
         raise IOError(
             'Base page could not be retrieved within the specified {} tries'.format(
-            TRY_MAX_COUNT)
+            try_max_count)
         )
 
 
 
-def get_unique_id():
-    page = get_base_page(ID_PAGE)
-    match = ID_REGEX.search(page)
+def get_unique_id(id_url, id_regex):
+    page = get_base_page(id_url)
+    match = id_regex.search(page)
+
     if match is not None:
         return match.group(1)
     else:
@@ -71,123 +54,166 @@ def get_unique_id():
 
 
 
-def make_request(number):
+def make_request(base_url, number):
 
-    url = BASE_URL.format(number=number)
+    url = base_url.format(number=number)
 
     return urlopen(url)
 
 
-def get_count():
-    document = get_base_page(COUNT_URL)
+def get_count(count_url, vote_count_regex):
+    document = get_base_page(count_url)
 
-    return re_get_count_from_document(document)
-
-
-
-def re_get_count_from_document(document):
-    return int(VOTE_COUNT_REGEX.search(document).group(1))
+    return re_get_count_from_document(vote_count_regex, document)
 
 
-def test():
+
+def re_get_count_from_document(vote_count_regex, document):
+    return int(vote_count_regex.search(document).group(1))
+
+
+def test(conf):
     teststring = """
 <div class="number-of-votes">Votes:
     <div class="number"> 3343</div>
 </div>
 """
-    match = VOTE_COUNT_REGEX.search(teststring)
+    vote_count_regex = re.compile(conf['vote_count_regex'])
+    match = vote_count_regex.search(teststring)
+
     if match is not None:
         print(match.groups())
     else:
         print('match failed')
 
 
-def test_get_count():
-    print(get_count())
+def test_get_count(config):
+    url = config['count_url']
+    vote_count_regex = re.compile(config['vote_count_regex'])
+    print(get_count(url, vote_count_regex))
 
 
-def get_random_string():
-    random_bits = os.urandom(random_bits_length)
+def do_vote(base_url, unique_id, count_url, vote_count_regex):
 
-    random_string = binascii.hexlify(random_bits).decode()
+    count_before = get_count(count_url, vote_count_regex)
 
-    return random_string
-
-
-def do_vote(unique_id=None):
-    if unique_id == None:
-        unique_id = get_unique_id()
-
-    r = make_request(unique_id)
+    r = make_request(base_url, unique_id)
     document = r.read().decode()
-    return bool(document)
 
+    success = bool(document)
 
-def test_one_vote(unique_id=None):
-    if unique_id == None:
-        try:
-            unique_id = get_unique_id()
-        except AlreadyVoted as e:
-            logging.info(repr(e))
-            return 'false', 'undefined', 'undefined'
-    count_before = get_count()
-
-    success = do_vote()
-
-    count_after = get_count()
+    count_after = get_count(count_url, vote_count_regex)
 
     return success, count_before, count_after
 
 
-def test_votes_verification(tries):
-    unique_id = get_unique_id()
-    tries = int(tries)
-
-    results = tuple(
-        (i, test_one_vote(unique_id)) for i in range(tries)
-    )
-
-    for number, counts in results:
-        success, before, after = counts
-        print('{}: before {}, after {}, difference {}'.format(
-            number, before, after, after - before
-        ))
-
-
-def vote_once():
-    success, before, after = test_one_vote()
+def report_vote_result(success, count_before, count_after):
     print(
-        'vote probably successful,'
-        if success and before < after else 'vote probably failed, count: {}'.format(before)
+        'vote probably successful, new count: {}'.format(count_after)
+        if success and before < after
+        else 'vote probably failed, count: {}'.format(count_before)
     )
     logging.debug(
-        'before: {}, after {}'.format(before, after)
+        'before: {}, after {}'.format(count_before, count_after)
     )
 
 
-def watch_and_vote():
+def vote_generator(config):
+    base_url = config['base_url']
+    count_url = config['count_url']
+    vote_count_regex = re.compile(config['vote_count_regex'], flags=re.DOTALL)
+    id_regex = re.compile(config['id_regex'])
+    id_url = config['id_url']
+
     while True:
         try:
-            vote_once()
+            unique_id = get_unique_id(id_url, id_regex)
+            yield do_vote(base_url, unique_id, count_url, vote_count_regex)
+        except AlreadyVoted as e:
+            logging.info(
+                'Id retrieval failed with error {}, '
+                'waiting {} seconds for retry'.format(e, id_retry_timeout)
+            )
+            time.sleep(id_retry_timeout)
+
+
+def vote_once(config):
+    success, count_before, count_after = next(vote_generator(config))
+    report_vote_result(success, count_before, count_after)
+
+
+def watch_and_vote(config):
+    gen = vote_generator(config)
+    while True:
+        try:
+            success, count_before, count_after = next(gen)
+            report_vote_result(success, count_before, count_after)
+        except KeyboardInterrupt:
+            raise
+        except StopIteration as e:
+            logging.critical(
+                'Iterator stopped unexpectedly: {}'.format(e)
+            )
+            raise
         except Exception as e:
             logging.error(repr(e))
-        time.sleep(TIMEOUT)
+        time.sleep(float(config['vote_interval']))
+
+
+def parse_args():
+    import argparse
+    import sys
+
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        'action', nargs=1
+    )
+    parser.add_argument(
+        'target', nargs='?', default=None
+    )
+    parser.add_argument(
+        '--logfile', type=str, default=None
+    )
+
+    return parser.parse_args(sys.argv[1:])
+
+
+def get_config(target='DEFAULT'):
+
+    if target == None:
+        target = 'DEFAULT'
+
+    _config = configparser.ConfigParser()
+    _config.read(_config_file_name)
+    return _config[target]
+
 
 
 def main():
-    import sys
-    script, option, *args  = sys.argv
 
-    if option == 'vote':
-        vote_once()
-    elif option == 'watch':
-        watch_and_vote()
-    elif option == 'test':
-        test()
-    elif option == 'test_get_count':
-        test_get_count()
-    elif option == 'test_vv':
-        test_votes_verification(*args)
+    args = parse_args()
+
+    action = args.action[0]
+
+    config = get_config(args.target)
+
+
+    if args.logfile:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            filename=args.logfile
+        )
+
+    if action == 'vote':
+        vote_once(config)
+    elif action == 'watch':
+        watch_and_vote(config)
+    elif action == 'test':
+        test(config)
+    elif action == 'test_get_count':
+        test_get_count(config)
 
 
 if __name__ == '__main__':
