@@ -13,9 +13,11 @@ COUNT_URL = 'http://www.89.0rtl.de/voting/schule/wilhelm-von-humboldt-gymnasium'
 
 VOTE_COUNT_REGEX = re.compile('class="number-of-votes".*?class="number"> (\d+?)</div>', flags=re.DOTALL)
 
-ID_REGEX = re.compile('"/vote/node/23959/1/vote/alternate/(.*?)"')
+ID_REGEX = re.compile('"/vote/node/23959/1/vote/alternate/(\w*?)"')
 
 TIMEOUT = 60 * 61
+
+TRY_MAX_COUNT = 4
 
 reference_random_string = '9aedac4c64bf5bf3535ad2f09ec93f9a'
 
@@ -24,11 +26,21 @@ random_bits_length = len(reference_random_string) * 4
 
 
 def get_base_page():
-    return urlopen(COUNT_URL).read().decode()
+    for i in range(TRY_MAX_COUNT):
+        content = urlopen(COUNT_URL).read().decode()
+        if content:
+            return content
+    else:
+        raise IOError(
+            'Base page could not be retrieved within the specified {} tries'.format(
+            TRY_MAX_COUNT)
+        )
+
 
 
 def get_unique_id():
     page = get_base_page()
+    print(page)
     match = ID_REGEX.search(page)
     return match.group(1)
 
@@ -112,7 +124,7 @@ def test_votes_verification(tries):
 
 def vote_once():
     before, after = test_one_vote()
-    print('vote successful' if before < after else 'vote failed')
+    print('vote successful, before: {}, after {}'.format(before, after) if before < after else 'vote failed')
 
 
 def watch_and_vote():
