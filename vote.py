@@ -29,7 +29,7 @@ VOTE_COUNT_REGEX = re.compile(_used_conf_section['vote_count_regex'], flags=re.D
 
 ID_REGEX = re.compile(_used_conf_section['id_regex'])
 
-TIMEOUT = 60 * 61
+TIMEOUT = int(_used_conf_section['vote_interval'])
 
 TRY_MAX_COUNT = 4
 
