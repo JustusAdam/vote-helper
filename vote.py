@@ -5,7 +5,12 @@ import re
 import os
 import binascii
 import time
+import logging
 
+
+logging.basicConfig(
+    level=logging.DEBUG
+)
 
 BASE_URL = 'http://www.89.0rtl.de/vote/node/23959/1/vote/alternate/{number}'
 
@@ -21,8 +26,17 @@ TRY_MAX_COUNT = 4
 
 reference_random_string = '9aedac4c64bf5bf3535ad2f09ec93f9a'
 
-
 random_bits_length = len(reference_random_string) * 4
+
+
+class AlreadyVoted(Exception):
+    def __init__(self, message):
+        self.message = message
+
+    def __str__(self):
+        return '{}: {}'.format(self.__class__.__name__, self.message)
+
+    __repr__ = __str__
 
 
 def get_base_page():
@@ -40,9 +54,12 @@ def get_base_page():
 
 def get_unique_id():
     page = get_base_page()
-    print(page)
     match = ID_REGEX.search(page)
-    return match.group(1)
+    if match is not None:
+        return match.group(1)
+    else:
+        raise AlreadyVoted('Unique Id could not be fetched')
+
 
 
 def make_request(number):
@@ -91,13 +108,21 @@ def get_random_string():
 def do_vote(unique_id=None):
     if unique_id == None:
         unique_id = get_unique_id()
-    make_request(unique_id)
+
+    r = make_request(unique_id)
+    document = r.read().decode()
+    if document:
+        logging.debug('Vote yielded a response:\n{}'.format(document))
 
 
 
 def test_one_vote(unique_id=None):
     if unique_id == None:
-        unique_id = get_unique_id()
+        try:
+            unique_id = get_unique_id()
+        except AlreadyVoted as e:
+            logging.info(repr(e))
+            return 'undefined', 'undefined'
     count_before = get_count()
 
     do_vote()
@@ -124,12 +149,21 @@ def test_votes_verification(tries):
 
 def vote_once():
     before, after = test_one_vote()
-    print('vote successful, before: {}, after {}'.format(before, after) if before < after else 'vote failed')
+    print(
+        'vote successful,'
+        if before < after else 'vote failed, count: {}'.format(before)
+    )
+    logging.debug(
+        'before: {}, after {}'.format(before, after)
+    )
 
 
 def watch_and_vote():
     while True:
-        vote_once()
+        try:
+            vote_once()
+        except Exception as e:
+            logging.error(repr(e))
         time.sleep(TIMEOUT)
 
 
