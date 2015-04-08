@@ -110,10 +110,14 @@ def test_votes_verification(tries):
         ))
 
 
+def vote_once():
+    before, after = test_one_vote()
+    print('vote successful' if before < after else 'vote failed')
+
+
 def watch_and_vote():
     while True:
-        before, after = test_one_vote()
-        print('vote successful' if before < after else 'vote failed')
+        vote_once()
         time.sleep(TIMEOUT)
 
 
@@ -121,7 +125,9 @@ def main():
     import sys
     script, option, *args  = sys.argv
 
-    if option == 'watch':
+    if option == 'vote':
+        vote_once()
+    elif option == 'watch':
         watch_and_vote()
     elif option == 'test':
         test()
