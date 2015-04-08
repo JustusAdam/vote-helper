@@ -129,7 +129,7 @@ def test_one_vote(unique_id=None):
             unique_id = get_unique_id()
         except AlreadyVoted as e:
             logging.info(repr(e))
-            return 'undefined', 'undefined'
+            return 'false', 'undefined', 'undefined'
     count_before = get_count()
 
     success = do_vote()
