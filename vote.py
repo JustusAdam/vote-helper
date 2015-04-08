@@ -121,7 +121,9 @@ def main():
     import sys
     script, option, *args  = sys.argv
 
-    if option == 'test':
+    if option == 'watch':
+        watch_and_vote()
+    elif option == 'test':
         test()
     elif option == 'test_get_count':
         test_get_count()
