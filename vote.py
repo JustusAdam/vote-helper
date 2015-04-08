@@ -6,19 +6,28 @@ import os
 import binascii
 import time
 import logging
+import configparser
 
 
 logging.basicConfig(
     level=logging.DEBUG
 )
 
-BASE_URL = 'http://www.89.0rtl.de/vote/node/23959/1/vote/alternate/{number}'
+_config_file_name = 'conf.ini'
 
-COUNT_URL = 'http://www.89.0rtl.de/voting/schule/wilhelm-von-humboldt-gymnasium'
+_config = configparser.ConfigParser()
+_config.read(_config_file_name)
+_used_conf_section = _config['DEFAULT']
 
-VOTE_COUNT_REGEX = re.compile('class="number-of-votes".*?class="number"> (\d+?)</div>', flags=re.DOTALL)
 
-ID_REGEX = re.compile('"/vote/node/23959/1/vote/alternate/(\w*?)"')
+BASE_URL = _used_conf_section['base_url']
+
+COUNT_URL = _used_conf_section['count_url']
+ID_PAGE = _used_conf_section['id_url']
+
+VOTE_COUNT_REGEX = re.compile(_used_conf_section['vote_count_regex'], flags=re.DOTALL)
+
+ID_REGEX = re.compile(_used_conf_section['id_regex'])
 
 TIMEOUT = 60 * 61
 
@@ -39,9 +48,9 @@ class AlreadyVoted(Exception):
     __repr__ = __str__
 
 
-def get_base_page():
+def get_base_page(page=COUNT_URL):
     for i in range(TRY_MAX_COUNT):
-        content = urlopen(COUNT_URL).read().decode()
+        content = urlopen(page).read().decode()
         if content:
             return content
     else:
@@ -53,7 +62,7 @@ def get_base_page():
 
 
 def get_unique_id():
-    page = get_base_page()
+    page = get_base_page(ID_PAGE)
     match = ID_REGEX.search(page)
     if match is not None:
         return match.group(1)
@@ -70,7 +79,7 @@ def make_request(number):
 
 
 def get_count():
-    document = get_base_page()
+    document = get_base_page(COUNT_URL)
 
     return re_get_count_from_document(document)
 
