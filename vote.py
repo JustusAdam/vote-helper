@@ -120,9 +120,7 @@ def do_vote(unique_id=None):
 
     r = make_request(unique_id)
     document = r.read().decode()
-    if document:
-        logging.debug('Vote yielded a response:\n{}'.format(document))
-
+    return bool(document)
 
 
 def test_one_vote(unique_id=None):
@@ -134,11 +132,11 @@ def test_one_vote(unique_id=None):
             return 'undefined', 'undefined'
     count_before = get_count()
 
-    do_vote()
+    success = do_vote()
 
     count_after = get_count()
 
-    return count_before, count_after
+    return success, count_before, count_after
 
 
 def test_votes_verification(tries):
@@ -150,17 +148,17 @@ def test_votes_verification(tries):
     )
 
     for number, counts in results:
-        before, after = counts
+        success, before, after = counts
         print('{}: before {}, after {}, difference {}'.format(
             number, before, after, after - before
         ))
 
 
 def vote_once():
-    before, after = test_one_vote()
+    success, before, after = test_one_vote()
     print(
-        'vote successful,'
-        if before < after else 'vote failed, count: {}'.format(before)
+        'vote probably successful,'
+        if success and before < after else 'vote probably failed, count: {}'.format(before)
     )
     logging.debug(
         'before: {}, after {}'.format(before, after)
