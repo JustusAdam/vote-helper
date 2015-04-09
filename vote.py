@@ -110,7 +110,7 @@ def do_vote(base_url, unique_id, count_url, vote_count_regex):
 def report_vote_result(success, count_before, count_after):
     print(
         'vote probably successful, new count: {}'.format(count_after)
-        if success and before < after
+        if success and count_before < count_after
         else 'vote probably failed, count: {}'.format(count_before)
     )
     logging.debug(
@@ -132,7 +132,12 @@ def vote_generator(config):
         except AlreadyVoted as e:
             logging.info(
                 'Id retrieval failed with error {}, '
-                'waiting {} seconds for retry'.format(e, id_retry_timeout)
+                'waiting {} for retry'.format(
+                    e,
+                    '{} seconds'.format(id_retry_timeout)
+                    if id_retry_timeout < 60
+                    else '{} minutes'.format(id_retry_timeout / 60.0)
+                )
             )
             time.sleep(id_retry_timeout)
 

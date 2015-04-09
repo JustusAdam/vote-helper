@@ -6,8 +6,11 @@ Perhaps a description will follow here some time.
 
 Make a copy of `conf.example.ini` called `conf.ini` and change the values as you require.
 
-Invoke `./vote.py` with:
-- **vote**: to try and vote once
-- **watch**: to watch with the defined interval and try to vote
+Invoke `./vote.py` as follows:  
+`vote.py [-h] [--logfile LOGFILE] action [target]`  
 
-Invoke `./vote.py watch` on the command line to watch and automatically vote.
+`action` can either be
+- **vote**: to vote only once and terminate, or
+- **watch**: to vote every interval set in the `conf.ini`
+
+`target` is optional and names the section in `conf.ini` from which to draw the settings.
