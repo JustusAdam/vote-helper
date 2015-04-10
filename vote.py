@@ -6,6 +6,7 @@ import os
 import time
 import logging
 import configparser
+import extensions
 
 
 _config_file_name = 'conf.ini'
@@ -136,6 +137,34 @@ def do_vote(base_url, unique_id, count_url, vote_count_regex, encoding, method, 
     return success, count_before, count_after
 
 
+def handle_extension(extension_names, values):
+    for extension in extension_names:
+        try:
+            func = getattr(extensions, extension)
+            requires = {a:values[a] for a in getattr(func, 'requires', ())}
+
+            producing = getattr(func, 'produces', ())
+
+            produced = func(*requires)
+
+            if len(producing) == 0:
+                pass
+            elif len(producing) == 1:
+                if isinstance(produced, (tuple, list)) and len(produced) == 1:
+                    produced = produced[0]
+                values[producing[0]] = produced
+            elif len(produced) != len(producing):
+                raise ValueError('Wrong number of values created')
+            else:
+                values.update(zip(producing, produced))
+
+        except NameError:
+            raise
+        except Exception as e:
+            logging.error(e)
+    return values
+
+
 def report_vote_result(success, count_before, count_after):
     print(
         'vote probably successful, new count: {}'.format(count_after)
@@ -148,16 +177,35 @@ def report_vote_result(success, count_before, count_after):
 
 
 def vote_generator(config):
-    base_url = config['base_url']
-    count_url = config['count_url']
+
     vote_count_regex = re.compile(config['vote_count_regex'], flags=re.DOTALL)
     id_regex = re.compile(config['id_regex'])
     id_url = config['id_url']
+
     method = config['request_method']
     headers = {a:config[a] for a in ACCEPTED_HEADERS if a in config}
-    encoding = config.get('Encoding', 'utf-8')
 
-    data = config.get('request_data', None) if method.lower() == 'post' else None
+    extension_names = config['extensions'].replace(' ', '').split(';')
+
+    changable = handle_extension(extension_names, {
+        'base_url': config['base_url'],
+        'count_url': config['count_url'],
+        'headers': headers,
+        'method': method,
+        'data': config.get('request_data', None) if method.lower() == 'post' else None,
+        'cookies': headers.get('Cookie', '')
+    })
+
+    base_url = changable['base_url']
+    count_url = changable['count_url']
+    headers = changable['headers']
+    method = changable['method']
+    data = changable['data']
+
+    if changable['cookies']:
+        headers['Cookie'] = changable['cookies']
+
+    encoding = config.get('Encoding', 'utf-8')
 
     while True:
         try:
