@@ -106,6 +106,8 @@ def do_vote(base_url, unique_id, count_url, vote_count_regex, method, headers, d
 
     success = bool(document)
 
+    logging.debug(document)
+
     count_after = get_count(count_url, vote_count_regex)
 
     return success, count_before, count_after
@@ -214,6 +216,7 @@ def main():
 
 
     if args.logfile:
+        print(args.logfile)
         logging.basicConfig(
             level=logging.DEBUG,
             filename=args.logfile
