@@ -8,10 +8,6 @@ import logging
 import configparser
 
 
-logging.basicConfig(
-    level=logging.DEBUG
-)
-
 _config_file_name = 'conf.ini'
 
 id_retry_timeout = 600
@@ -221,6 +217,10 @@ def main():
             level=logging.DEBUG,
             filename=args.logfile
         )
+    else:
+        logging.basicConfig(
+            level=logging.DEBUG
+        )
 
     if action == 'vote':
         vote_once(config)
@@ -234,3 +234,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+else:
+    logging.basicConfig(
+        level=logging.DEBUG
+    )
