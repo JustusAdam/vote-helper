@@ -54,9 +54,11 @@ def get_unique_id(id_url, id_regex):
 
 
 
-def make_request(base_url, number):
+def make_request(base_url, number, method='get'):
 
     url = base_url.format(number=number)
+
+    r = Request(url, method=method)
 
     return urlopen(url)
 
@@ -93,11 +95,11 @@ def test_get_count(config):
     print(get_count(url, vote_count_regex))
 
 
-def do_vote(base_url, unique_id, count_url, vote_count_regex):
+def do_vote(base_url, unique_id, count_url, vote_count_regex, method):
 
     count_before = get_count(count_url, vote_count_regex)
 
-    r = make_request(base_url, unique_id)
+    r = make_request(base_url, unique_id, method)
     document = r.read().decode()
 
     success = bool(document)
@@ -124,11 +126,12 @@ def vote_generator(config):
     vote_count_regex = re.compile(config['vote_count_regex'], flags=re.DOTALL)
     id_regex = re.compile(config['id_regex'])
     id_url = config['id_url']
+    method = config['request_method']
 
     while True:
         try:
             unique_id = get_unique_id(id_url, id_regex)
-            yield do_vote(base_url, unique_id, count_url, vote_count_regex)
+            yield do_vote(base_url, unique_id, count_url, vote_count_regex, method)
         except AlreadyVoted as e:
             logging.info(
                 'Id retrieval failed with error {}, '
