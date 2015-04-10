@@ -18,6 +18,8 @@ id_retry_timeout = 600
 
 TRY_MAX_COUNT = 4
 
+ACCEPTED_HEADERS = {'Content-Type', 'Referer', 'X-Requested-With', 'Host', 'Origin', 'DNT'}
+
 
 class AlreadyVoted(Exception):
     def __init__(self, message):
@@ -54,11 +56,11 @@ def get_unique_id(id_url, id_regex):
 
 
 
-def make_request(base_url, number, method='get'):
+def make_request(base_url, number, method='get', headers=None, data=None):
 
     url = base_url.format(number=number)
 
-    r = Request(url, method=method)
+    r = Request(url, data=data, method=method, headers={} if headers is None else headers)
 
     return urlopen(url)
 
@@ -95,11 +97,11 @@ def test_get_count(config):
     print(get_count(url, vote_count_regex))
 
 
-def do_vote(base_url, unique_id, count_url, vote_count_regex, method):
+def do_vote(base_url, unique_id, count_url, vote_count_regex, method, headers, data):
 
     count_before = get_count(count_url, vote_count_regex)
 
-    r = make_request(base_url, unique_id, method)
+    r = make_request(base_url, unique_id, method, headers, data)
     document = r.read().decode()
 
     success = bool(document)
@@ -127,11 +129,14 @@ def vote_generator(config):
     id_regex = re.compile(config['id_regex'])
     id_url = config['id_url']
     method = config['request_method']
+    headers = {a:config[a] for a in ACCEPTED_HEADERS if a in config}
+
+    data = config.get('request_data', None) if method == 'post' else None
 
     while True:
         try:
             unique_id = get_unique_id(id_url, id_regex)
-            yield do_vote(base_url, unique_id, count_url, vote_count_regex, method)
+            yield do_vote(base_url, unique_id, count_url, vote_count_regex, method, headers, data)
         except AlreadyVoted as e:
             logging.info(
                 'Id retrieval failed with error {}, '
